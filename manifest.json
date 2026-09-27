@@ -1,0 +1,16 @@
+{
+  "name": "QuizRush - Cyber Arcade Trivia",
+  "short_name": "QuizRush",
+  "description": "Hyper-speed cyber arcade trivia game created by Jessie Israel. Test your synaptic reflex across 6 multi-difficulty categories!",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#080b12",
+  "theme_color": "#00f0ff",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23080b12'/><path d='M50 15 L32 52 L48 52 L40 85 L68 44 L52 44 Z' fill='%23ffde00'/></svg>",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

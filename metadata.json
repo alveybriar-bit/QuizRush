@@ -1,0 +1,6 @@
+{
+  "name": "QuizRush",
+  "description": "High-octane cyberpunk arcade trivia with power-ups, multiple game modes, and ranking progression.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,1939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>QuizRush - Cyber Arcade Trivia</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#00f0ff" />
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            cyber: {
+              cyan: '#00f0ff',
+              pink: '#ff007f',
+              yellow: '#ffde00',
+              green: '#00ff88',
+              purple: '#9d00ff',
+              orange: '#ff6b00',
+              blue: '#2979ff',
+              red: '#ff2a55',
+              dark: '#080b12',
+              card: '#162035',
+              elevated: '#1e2c48',
+              surface: '#0f1524'
+            }
+          },
+          animation: {
+            'pulse-fast': 'pulse 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'shake': 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both',
+            'glow-pulse': 'glowPulse 2s ease-in-out infinite'
+          },
+          keyframes: {
+            shake: {
+              '10%, 90%': { transform: 'translate3d(-2px, 0, 0)' },
+              '20%, 80%': { transform: 'translate3d(4px, 0, 0)' },
+              '30%, 50%, 70%': { transform: 'translate3d(-6px, 0, 0)' },
+              '40%, 60%': { transform: 'translate3d(6px, 0, 0)' }
+            },
+            glowPulse: {
+              '0%, 100%': { boxShadow: '0 0 15px rgba(0, 240, 255, 0.4)' },
+              '50%': { boxShadow: '0 0 35px rgba(255, 0, 127, 0.6)' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap');
+
+    body {
+      font-family: 'Rajdhani', sans-serif;
+      background-color: #080b12;
+      color: #f8fafc;
+      overflow-x: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .font-arcade {
+      font-family: 'Orbitron', monospace;
+    }
+
+    .neon-text-cyan {
+      text-shadow: 0 0 10px rgba(0, 240, 255, 0.7), 0 0 20px rgba(0, 240, 255, 0.4);
+    }
+
+    .neon-text-yellow {
+      text-shadow: 0 0 10px rgba(255, 222, 0, 0.7), 0 0 20px rgba(255, 222, 0, 0.4);
+    }
+
+    .neon-text-pink {
+      text-shadow: 0 0 10px rgba(255, 0, 127, 0.7), 0 0 20px rgba(255, 0, 127, 0.4);
+    }
+
+    .glass-panel {
+      background: rgba(22, 32, 53, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1.5px solid rgba(0, 240, 255, 0.25);
+    }
+
+    .glass-panel:hover {
+      border-color: rgba(0, 240, 255, 0.5);
+    }
+
+    .streak-flame-glow {
+      box-shadow: 0 0 25px rgba(255, 222, 0, 0.5), inset 0 0 15px rgba(255, 107, 0, 0.3);
+      border-color: #ffde00 !important;
+    }
+
+    /* Custom Theme Overrides */
+    body.theme-vaporwave {
+      background-color: #130924;
+    }
+    body.theme-vaporwave .glass-panel {
+      background: rgba(43, 23, 77, 0.85);
+      border-color: rgba(255, 113, 206, 0.35);
+    }
+
+    body.theme-midnight {
+      background-color: #000000;
+    }
+    body.theme-midnight .glass-panel {
+      background: rgba(12, 12, 16, 0.95);
+      border-color: rgba(0, 255, 136, 0.3);
+    }
+
+    /* Confetti Particle Canvas */
+    #particleCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #080b12;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e2c48;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #00f0ff;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-cyber-cyan selection:text-black">
+  <canvas id="particleCanvas"></canvas>
+
+  <!-- Sound Engine Notification Bar -->
+  <div id="floatingNotifications" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none w-full max-w-md px-4"></div>
+
+  <!-- MAIN APP CONTAINER -->
+  <div id="app" class="w-full max-w-xl mx-auto flex-1 flex flex-col p-4 relative"></div>
+
+  <!-- APP SCRIPT & STATE MACHINE -->
+  <script>
+    /**
+     * PROCEDURAL SYNTHESIZED WEB AUDIO API SOUND SYSTEM
+     */
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) {
+            this.ctx = new AudioContext();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      play(freq, type = 'sine', duration = 0.15, vol = 0.2, pitchBend = 0) {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          if (pitchBend !== 0) {
+            osc.frequency.exponentialRampToValueAtTime(freq + pitchBend, this.ctx.currentTime + duration);
+          }
+          gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      correct() {
+        this.play(523.25, 'triangle', 0.12, 0.25, 200); // C5
+        setTimeout(() => this.play(659.25, 'triangle', 0.12, 0.25, 200), 80); // E5
+        setTimeout(() => this.play(783.99, 'triangle', 0.25, 0.3, 300), 160); // G5
+        this.haptic([20, 30, 40]);
+      }
+
+      wrong() {
+        this.play(180, 'sawtooth', 0.25, 0.3, -60);
+        this.haptic([100, 50, 100]);
+      }
+
+      tick() {
+        this.play(800, 'sine', 0.04, 0.08);
+      }
+
+      urgentTick() {
+        this.play(1100, 'sawtooth', 0.06, 0.18);
+        this.haptic(15);
+      }
+
+      clutch() {
+        this.play(440, 'square', 0.1, 0.25, 400);
+        setTimeout(() => this.play(880, 'triangle', 0.3, 0.35, 600), 100);
+        this.haptic([40, 40, 80]);
+      }
+
+      powerup() {
+        this.play(300, 'sine', 0.15, 0.2, 500);
+        setTimeout(() => this.play(600, 'sine', 0.2, 0.25, 600), 100);
+        this.haptic(30);
+      }
+
+      streak() {
+        this.play(587.33, 'triangle', 0.12, 0.25);
+        setTimeout(() => this.play(739.99, 'triangle', 0.12, 0.25), 80);
+        setTimeout(() => this.play(880.00, 'triangle', 0.15, 0.3), 160);
+        setTimeout(() => this.play(1174.66, 'triangle', 0.35, 0.35), 240);
+        this.haptic([30, 40, 60, 80]);
+      }
+
+      unbox() {
+        this.play(350, 'square', 0.1, 0.2);
+        setTimeout(() => this.play(500, 'square', 0.12, 0.25), 100);
+        setTimeout(() => this.play(700, 'triangle', 0.15, 0.3), 200);
+        setTimeout(() => this.play(1050, 'triangle', 0.4, 0.4), 300);
+      }
+
+      haptic(pattern) {
+        if ('vibrate' in navigator) {
+          try {
+            navigator.vibrate(pattern);
+          } catch (e) {}
+        }
+      }
+    }
+
+    const sound = new SoundEngine();
+
+    /**
+     * PARTICLE BURST CANVAS FX
+     */
+    const canvas = document.getElementById('particleCanvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function triggerParticleBurst(x, y, count = 35, colors = ['#00f0ff', '#ff007f', '#ffde00', '#00ff88']) {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 8 + 3;
+        particles.push({
+          x: x || window.innerWidth / 2,
+          y: y || window.innerHeight / 2,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: Math.random() * 4 + 2,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          alpha: 1,
+          decay: Math.random() * 0.025 + 0.015
+        });
+      }
+    }
+
+    function animateParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.18; // gravity
+        p.alpha -= p.decay;
+        if (p.alpha <= 0) {
+          particles.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      requestAnimationFrame(animateParticles);
+    }
+    animateParticles();
+
+    /**
+     * 36+ MULTI-CATEGORY QUESTION BANK WITH FUN FACTS & EXPLANATIONS
+     */
+    const QUESTION_BANK = [
+      // 1. Tech & Coding
+      {
+        id: 'tech_1',
+        category: 'tech',
+        difficulty: 'EASY',
+        prompt: 'Which data structure operates on a Last-In, First-Out (LIFO) order?',
+        options: ['Queue', 'Stack', 'Linked List', 'Hash Table'],
+        correct: 1,
+        explanation: 'A Stack is a LIFO structure where elements pushed last are the first ones popped.',
+        funFact: 'The term "call stack" in programming comes directly from this mechanical memory stack structure!'
+      },
+      {
+        id: 'tech_2',
+        category: 'tech',
+        difficulty: 'MEDIUM',
+        prompt: 'What is the average time complexity of searching in a balanced Binary Search Tree?',
+        options: ['O(1)', 'O(n)', 'O(log n)', 'O(n log n)'],
+        correct: 2,
+        explanation: 'Balanced BSTs halve the search area at each comparison step, achieving logarithmic O(log n) time.',
+        funFact: 'Self-balancing AVL trees are named after Soviet inventors Adelson-Velsky and Landis in 1962.'
+      },
+      {
+        id: 'tech_3',
+        category: 'tech',
+        difficulty: 'MEDIUM',
+        prompt: 'Which semiconductor pioneer formulated the observation that transistor counts on a microchip double approximately every two years?',
+        options: ['Gordon Moore', 'Robert Noyce', 'Alan Turing', 'Steve Wozniak'],
+        correct: 0,
+        explanation: 'Gordon Moore, co-founder of Intel, coined Moore\'s Law in a famous 1965 research paper.',
+        funFact: 'Moore originally estimated the doubling period at one year, only revising it to two years in 1975!'
+      },
+      {
+        id: 'tech_4',
+        category: 'tech',
+        difficulty: 'HARD',
+        prompt: 'In distributed computing, what does the "C" in Eric Brewer\'s CAP theorem represent?',
+        options: ['Concurrency', 'Consistency', 'Complexity', 'Coherence'],
+        correct: 1,
+        explanation: 'CAP stands for Consistency, Availability, and Partition Tolerance.',
+        funFact: 'Brewer proved you can only simultaneously guarantee any two of the three properties in a distributed network.'
+      },
+      {
+        id: 'tech_5',
+        category: 'tech',
+        difficulty: 'EASY',
+        prompt: 'Which programming language created by Brendan Eich in 1995 was famously developed in just 10 days?',
+        options: ['Python', 'Ruby', 'JavaScript', 'PHP'],
+        correct: 2,
+        explanation: 'JavaScript was created by Brendan Eich at Netscape Communications in May 1995.',
+        funFact: 'Its original code name was Mocha, before being renamed LiveScript and finally JavaScript.'
+      },
+      {
+        id: 'tech_6',
+        category: 'tech',
+        difficulty: 'HARD',
+        prompt: 'What is the primary consensus algorithm originally implemented by Satoshi Nakamoto in Bitcoin?',
+        options: ['Proof of Stake', 'Proof of Authority', 'Proof of Work', 'Raft Consensus'],
+        correct: 2,
+        explanation: 'Proof of Work uses Hashcash SHA-256 computational proof to secure the distributed ledger.',
+        funFact: 'Adam Back invented Hashcash in 1997 originally as a countermeasure against email spam!'
+      },
+
+      // 2. Pop Culture & Gaming
+      {
+        id: 'pop_1',
+        category: 'pop',
+        difficulty: 'EASY',
+        prompt: 'What is the subtitle of the acclaimed 2022 FromSoftware action RPG featuring the Lands Between?',
+        options: ['Dark Souls', 'Bloodborne', 'Elden Ring', 'Demon Souls'],
+        correct: 2,
+        explanation: 'Elden Ring was directed by Hidetaka Miyazaki in collaboration with novelist George R. R. Martin.',
+        funFact: 'Elden Ring won over 320 Game of the Year awards, surpassing The Last of Us Part II as the most awarded game in history!'
+      },
+      {
+        id: 'pop_2',
+        category: 'pop',
+        difficulty: 'MEDIUM',
+        prompt: 'In The Matrix (1999), what color pill does Neo take to wake up and see the truth of reality?',
+        options: ['Blue', 'Red', 'Yellow', 'Green'],
+        correct: 1,
+        explanation: 'Morpheus offers Neo a blue pill to return to ignorance or a red pill to discover the truth.',
+        funFact: 'The iconic digital rain code in The Matrix was actually sourced from digitized Japanese sushi cookbook recipes!'
+      },
+      {
+        id: 'pop_3',
+        category: 'pop',
+        difficulty: 'HARD',
+        prompt: 'What was the first commercially successful coin-operated arcade video game released by Atari in 1972?',
+        options: ['Space Invaders', 'Pac-Man', 'Pong', 'Asteroids'],
+        correct: 2,
+        explanation: 'Pong was created by Allan Alcorn and released by Atari founders Nolan Bushnell and Ted Dabney.',
+        funFact: 'The prototype Pong machine installed at Andy Capp\'s Tavern stopped working because its coin mechanism was jammed with quarters!'
+      },
+      {
+        id: 'pop_4',
+        category: 'pop',
+        difficulty: 'EASY',
+        prompt: 'Which superhero alter-ego is billionaire Bruce Wayne known as in DC Comics?',
+        options: ['Superman', 'Batman', 'Iron Man', 'Green Arrow'],
+        correct: 1,
+        explanation: 'Batman was created by Bob Kane and Bill Finger, first appearing in Detective Comics #27 in 1939.',
+        funFact: 'Wayne Enterprises\' corporate headquarters in Gotham City has a secret subway line leading directly into the Batcave!'
+      },
+      {
+        id: 'pop_5',
+        category: 'pop',
+        difficulty: 'MEDIUM',
+        prompt: 'In Valve\'s Portal series, what fictional corporation developed the Aperture Science Handheld Portal Device?',
+        options: ['Black Mesa', 'Aperture Science', 'Vault-Tec', 'Umbrella Corp'],
+        correct: 1,
+        explanation: 'Aperture Science Innovators was founded by eccentric CEO Cave Johnson in 1943.',
+        funFact: 'Aperture started as a shower curtain manufacturer before shifting into quantum tunneling research!'
+      },
+      {
+        id: 'pop_6',
+        category: 'pop',
+        difficulty: 'HARD',
+        prompt: 'Which cinematic classic directed by Ridley Scott introduced the dystopian cyberpunk city of 2019 Los Angeles?',
+        options: ['Blade Runner', 'Total Recall', 'Akira', 'RoboCop'],
+        correct: 0,
+        explanation: 'Blade Runner was adapted from Philip K. Dick\'s 1968 novel "Do Androids Dream of Electric Sheep?".',
+        funFact: 'Rutger Hauer improvised the iconic "Tears in rain" soliloquy on set the night before filming!'
+      },
+
+      // 3. Science & Cosmos
+      {
+        id: 'sci_1',
+        category: 'science',
+        difficulty: 'EASY',
+        prompt: 'What is the speed of light in a vacuum, rounded to the nearest kilometer per second?',
+        options: ['150,000 km/s', '299,792 km/s', '384,400 km/s', '1,080,000 km/s'],
+        correct: 1,
+        explanation: 'Light travels at exactly 299,792,458 meters per second in a vacuum (symbolized as c).',
+        funFact: 'A particle of light takes only 1.28 seconds to travel from the Moon to planet Earth!'
+      },
+      {
+        id: 'sci_2',
+        category: 'science',
+        difficulty: 'MEDIUM',
+        prompt: 'What is the theoretical boundary around a black hole beyond which nothing, not even light, can escape?',
+        options: ['Singularity', 'Photon Sphere', 'Event Horizon', 'Accretion Disk'],
+        correct: 2,
+        explanation: 'The event horizon marks the gravitational cutoff radius discovered in Karl Schwarzschild\'s metric.',
+        funFact: 'If the Sun were compressed into a black hole, its event horizon would span only 6 kilometers in diameter!'
+      },
+      {
+        id: 'sci_3',
+        category: 'science',
+        difficulty: 'HARD',
+        prompt: 'Which subatomic particle was experimentally verified at CERN\'s Large Hadron Collider in 2012, confirming the origin of mass?',
+        options: ['Higgs Boson', 'Top Quark', 'Graviton', 'Muon Neutrino'],
+        correct: 0,
+        explanation: 'The Higgs boson is the fundamental excitation of the Higgs field that imparts inertial mass to W and Z bosons.',
+        funFact: 'Physicist Leon Lederman originally nicknamed it the "Goddamn Particle" because of how hard it was to detect!'
+      },
+      {
+        id: 'sci_4',
+        category: 'science',
+        difficulty: 'EASY',
+        prompt: 'What is the most abundant chemical element in the observable universe by atomic mass?',
+        options: ['Oxygen', 'Carbon', 'Helium', 'Hydrogen'],
+        correct: 3,
+        explanation: 'Hydrogen accounts for roughly 75% of all normal baryonic matter created during the Big Bang.',
+        funFact: 'Jupiter is composed almost entirely of hydrogen and helium, matching the primordial nebula of our solar system!'
+      },
+      {
+        id: 'sci_5',
+        category: 'science',
+        difficulty: 'MEDIUM',
+        prompt: 'What is the powerhouse organelle in eukaryotic cells responsible for producing Adenosine Triphosphate (ATP)?',
+        options: ['Ribosome', 'Mitochondria', 'Endoplasmic Reticulum', 'Golgi Apparatus'],
+        correct: 1,
+        explanation: 'Mitochondria generate cellular energy via oxidative phosphorylation and the Krebs cycle.',
+        funFact: 'Mitochondria possess their own distinct circular DNA (mtDNA) inherited exclusively through the maternal line!'
+      },
+      {
+        id: 'sci_6',
+        category: 'science',
+        difficulty: 'HARD',
+        prompt: 'What is the name of the astronomical telescope launched on Christmas Day 2021 orbiting the Sun-Earth L2 Lagrange point?',
+        options: ['Hubble', 'Spitzer', 'James Webb Space Telescope', 'Kepler'],
+        correct: 2,
+        explanation: 'The JWST observes in deep infrared to image the very first galaxies formed after the Big Bang.',
+        funFact: 'Its tennis-court-sized sunshield cools the science instruments down to a frigid -233°C (-388°F)!'
+      },
+
+      // 4. History & Lore
+      {
+        id: 'hist_1',
+        category: 'history',
+        difficulty: 'EASY',
+        prompt: 'Which ancient Egyptian pharaoh\'s nearly intact tomb was discovered by Howard Carter in the Valley of the Kings in 1922?',
+        options: ['Ramesses II', 'Tutankhamun', 'Akhenaten', 'Khufu'],
+        correct: 1,
+        explanation: 'King Tutankhamun\'s tomb (KV62) yielded thousands of pristine royal artifacts and the iconic golden death mask.',
+        funFact: 'Carter spent nearly a decade cataloging over 5,000 distinct artifacts found packed inside the small four-room tomb!'
+      },
+      {
+        id: 'hist_2',
+        category: 'history',
+        difficulty: 'MEDIUM',
+        prompt: 'In Norse mythology, what is the name of the rainbow bridge connecting Midgard (the mortal realm) to Asgard?',
+        options: ['Yggdrasil', 'Bifröst', 'Valhalla', 'Gjallarbrú'],
+        correct: 1,
+        explanation: 'Bifröst is the burning, three-strand rainbow bridge guarded day and night by the god Heimdallr.',
+        funFact: 'Norse poets wrote that red in the rainbow is burning fire designed to keep the mountain jotnar (giants) from scaling it!'
+      },
+      {
+        id: 'hist_3',
+        category: 'history',
+        difficulty: 'HARD',
+        prompt: 'Which decisive naval engagement in 480 BCE saw the allied Greek city-states defeat the Persian fleet of King Xerxes?',
+        options: ['Battle of Marathon', 'Battle of Thermopylae', 'Battle of Salamis', 'Battle of Plataea'],
+        correct: 2,
+        explanation: 'The Battle of Salamis, engineered by Athenian general Themistocles, trapped the Persian fleet in narrow straits.',
+        funFact: 'Queen Artemisia of Caria, fighting for Xerxes, famously rammed another Persian ship to escape, winning Xerxes\' ironic praise!'
+      },
+      {
+        id: 'hist_4',
+        category: 'history',
+        difficulty: 'MEDIUM',
+        prompt: 'Who was the first emperor of unified China, responsible for commissioning the Terracotta Army in 210 BCE?',
+        options: ['Qin Shi Huang', 'Han Wudi', 'Kublai Khan', 'Sun Tzu'],
+        correct: 0,
+        explanation: 'Qin Shi Huang unified the Warring States into the Qin Dynasty and standardized Chinese characters and currency.',
+        funFact: 'Archaeologists believe Qin Shi Huang\'s inner burial mound contains a simulated cosmos with rivers of flowing liquid mercury!'
+      },
+      {
+        id: 'hist_5',
+        category: 'history',
+        difficulty: 'EASY',
+        prompt: 'In Greek mythology, who was condemned to roll an immense boulder up a hill only for it to roll back down for eternity?',
+        options: ['Prometheus', 'Sisyphus', 'Tantalus', 'Icarus'],
+        correct: 1,
+        explanation: 'King Sisyphus was punished for cheating death twice, giving rise to the term "Sisyphean task".',
+        funFact: 'Albert Camus famously concluded his existential philosophical essay: "One must imagine Sisyphus happy."'
+      },
+      {
+        id: 'hist_6',
+        category: 'history',
+        difficulty: 'HARD',
+        prompt: 'Which 1815 battle fought in present-day Belgium marked the final military defeat of French Emperor Napoleon Bonaparte?',
+        options: ['Battle of Austerlitz', 'Battle of Leipzig', 'Battle of Waterloo', 'Battle of Borodino'],
+        correct: 2,
+        explanation: 'Napoleon was defeated by the Anglo-allied army of the Duke of Wellington and Gebhard von Blücher\'s Prussian force.',
+        funFact: 'Heavy torrential rainfall the night before Waterloo forced Napoleon to delay his artillery attack until the mud dried!'
+      },
+
+      // 5. Global Geopolitics & Geography
+      {
+        id: 'geo_1',
+        category: 'geo',
+        difficulty: 'EASY',
+        prompt: 'What is the capital city of Japan, known as the most populous metropolitan area on Earth?',
+        options: ['Kyoto', 'Osaka', 'Tokyo', 'Sapporo'],
+        correct: 2,
+        explanation: 'Tokyo (formerly known as Edo) has a greater metropolitan population surpassing 37 million residents.',
+        funFact: 'Tokyo was originally a humble fishing village until Tokugawa Ieyasu established his shogunate headquarters there in 1603!'
+      },
+      {
+        id: 'geo_2',
+        category: 'geo',
+        difficulty: 'MEDIUM',
+        prompt: 'Which landlocked country is entirely surrounded by South Africa?',
+        options: ['Eswatini', 'Lesotho', 'Botswana', 'Namibia'],
+        correct: 1,
+        explanation: 'The Kingdom of Lesotho is an enclave nation completely encircled by South African territory.',
+        funFact: 'Lesotho is the only independent state in the world that lies entirely above 1,000 meters (3,281 ft) in elevation!'
+      },
+      {
+        id: 'geo_3',
+        category: 'geo',
+        difficulty: 'HARD',
+        prompt: 'What narrow strait connects the Mediterranean Sea to the Atlantic Ocean, separating Spain and Morocco by just 14 km?',
+        options: ['Strait of Hormuz', 'Strait of Malacca', 'Strait of Gibraltar', 'Bosphorus Strait'],
+        correct: 2,
+        explanation: 'The Strait of Gibraltar connects the Atlantic to the Mediterranean, flanked by the Pillars of Hercules.',
+        funFact: 'Due to dense evaporation in the Mediterranean, a permanent subsurface current flows water back into the Atlantic!'
+      },
+      {
+        id: 'geo_4',
+        category: 'geo',
+        difficulty: 'EASY',
+        prompt: 'Which colossal geological trench in the Pacific Ocean is the deepest known location on planet Earth?',
+        options: ['Java Trench', 'Mariana Trench', 'Puerto Rico Trench', 'Sunda Trench'],
+        correct: 1,
+        explanation: 'The Challenger Deep in the Mariana Trench reaches approximately 10,994 meters (36,070 ft) below sea level.',
+        funFact: 'If Mount Everest were dropped into the Challenger Deep, its summit would still be submerged under more than 2 km of water!'
+      },
+      {
+        id: 'geo_5',
+        category: 'geo',
+        difficulty: 'MEDIUM',
+        prompt: 'Which country spans the most contiguous time zones across a single continental landmass?',
+        options: ['Canada', 'United States', 'Russia', 'China'],
+        correct: 2,
+        explanation: 'Russia spans 11 contiguous time zones, from Kaliningrad in the west to Kamchatka in the far east.',
+        funFact: 'By contrast, China officially operates on a single nationwide unified time zone (Beijing Standard Time) despite spanning 5 geographical zones!'
+      },
+      {
+        id: 'geo_6',
+        category: 'geo',
+        difficulty: 'HARD',
+        prompt: 'What is the capital city of Australia, purpose-built following a compromise between rivals Sydney and Melbourne?',
+        options: ['Brisbane', 'Canberra', 'Perth', 'Adelaide'],
+        correct: 1,
+        explanation: 'Canberra was planned by American architects Walter Burley Griffin and Marion Mahony Griffin in 1913.',
+        funFact: 'The city plan is organized around geometric axes, concentric circles, and hexagonal street networks with Lake Burley Griffin at its center!'
+      },
+
+      // 6. Mind Benders & Riddles
+      {
+        id: 'mind_1',
+        category: 'riddle',
+        difficulty: 'EASY',
+        prompt: 'I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?',
+        options: ['A Shadow', 'An Echo', 'A Secret', 'A Cloud'],
+        correct: 1,
+        explanation: 'An echo repeats acoustic sounds bounced back from canyon walls or surfaces.',
+        funFact: 'Anechoic sound chambers absorb 99.99% of sound reflections—you can literally hear your own heartbeat and lung valves opening!'
+      },
+      {
+        id: 'mind_2',
+        category: 'riddle',
+        difficulty: 'MEDIUM',
+        prompt: 'A bat and a baseball ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost?',
+        options: ['10 cents ($0.10)', '5 cents ($0.05)', '1 cent ($0.01)', '2 cents ($0.02)'],
+        correct: 1,
+        explanation: 'If Ball = x, then Bat = x + $1.00. Total = 2x + $1.00 = $1.10. Solving for x yields $0.05 (5 cents).',
+        funFact: 'Nobel laureate Daniel Kahneman used this classic cognitive puzzle in "Thinking, Fast and Slow" to illustrate System 1 intuition pitfalls!'
+      },
+      {
+        id: 'mind_3',
+        category: 'riddle',
+        difficulty: 'HARD',
+        prompt: 'You have 3 boxes: one with only Apples, one with only Oranges, and one with Both. ALL boxes are mislabeled. You draw ONE fruit from ONE box without looking inside. Which box must you draw from to correctly label all three?',
+        options: ['Apples Box', 'Oranges Box', 'Apples & Oranges Box', 'It is mathematically impossible'],
+        correct: 2,
+        explanation: 'Drawing from the box labeled "Both" reveals its true single fruit. Since all labels are wrong, the remaining two swap positions!',
+        funFact: 'This is a textbook lateral thinking logic problem known as the "Three Labeled Boxes Puzzle" taught in algorithmic reasoning!'
+      },
+      {
+        id: 'mind_4',
+        category: 'riddle',
+        difficulty: 'EASY',
+        prompt: 'What has keys but no locks, space but no room, and you can enter but can never go outside?',
+        options: ['A Piano', 'A Keyboard', 'A Jailhouse', 'A Map'],
+        correct: 1,
+        explanation: 'A computer keyboard has letter keys, a space bar, and an Enter key!',
+        funFact: 'The classic QWERTY keyboard arrangement was patented in 1878 by Christopher Sholes to prevent mechanical typewriter jams!'
+      },
+      {
+        id: 'mind_5',
+        category: 'riddle',
+        difficulty: 'MEDIUM',
+        prompt: 'Forward I am heavy, but backward I am not. What am I?',
+        options: ['A Feather', 'The word "TON"', 'Lead', 'An Anchor'],
+        correct: 1,
+        explanation: 'The word "TON" spelled backwards is "NOT"!',
+        funFact: 'Semordnilap is the linguistic word for words that create a completely different real word when spelled backwards!'
+      },
+      {
+        id: 'mind_6',
+        category: 'riddle',
+        difficulty: 'HARD',
+        prompt: 'A prisoner is told: "Make a statement. If it is true, you will be drowned. If it is false, you will be hanged." What statement can he make to save his life?',
+        options: ['"I am innocent."', '"You will hang me."', '"I will die today."', '"Truth is relative."'],
+        correct: 1,
+        explanation: 'If they hang him, the statement was true (meaning he should be drowned). If they drown him, it was false (meaning he should be hanged). A fatal paradox!',
+        funFact: 'This is the classic Crocodile Paradox variation formulated by ancient Greek logicians to explore self-referential paradoxes!'
+      }
+    ];
+
+    /**
+     * STATE MANAGEMENT & LOCAL STORAGE
+     */
+    const STORAGE_KEY = 'quizrush_pilot_v1';
+
+    function loadState() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+      return {
+        playerName: 'CyberRunner',
+        coins: 250,
+        xp: 0,
+        streakRecord: 0,
+        powerups: {
+          fifty: 2,
+          freeze: 2,
+          shield: 2
+        },
+        theme: 'cyberpunk',
+        unlockedThemes: ['cyberpunk'],
+        avatarFrame: 'NEON_CYAN',
+        unlockedFrames: ['NEON_CYAN'],
+        lootBoxes: 1,
+        dailyStreak: 1,
+        lastDailyEpoch: 0
+      };
+    }
+
+    let state = loadState();
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    // Daily streak check
+    function checkDailyReward() {
+      const todayEpoch = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
+      if (state.lastDailyEpoch === 0) {
+        state.lastDailyEpoch = todayEpoch;
+        state.dailyStreak = 1;
+        state.coins += 200;
+        saveState();
+        showNotification('🎁 Welcome Bonus: +200 Rush Coins!', '#ffde00');
+      } else if (todayEpoch > state.lastDailyEpoch) {
+        if (todayEpoch === state.lastDailyEpoch + 1) {
+          state.dailyStreak++;
+        } else {
+          state.dailyStreak = 1;
+        }
+        state.lastDailyEpoch = todayEpoch;
+        const reward = Math.min(150 + state.dailyStreak * 50, 750);
+        state.coins += reward;
+        saveState();
+        showNotification(`🔥 Day ${state.dailyStreak} Streak Bonus: +${reward} Coins!`, '#ffde00');
+        sound.streak();
+      }
+    }
+
+    function showNotification(text, color = '#00f0ff') {
+      const container = document.getElementById('floatingNotifications');
+      const pill = document.createElement('div');
+      pill.className = 'glass-panel px-4 py-2 rounded-full text-xs font-bold tracking-wider uppercase flex items-center gap-2 animate-bounce border shadow-lg';
+      pill.style.borderColor = color;
+      pill.style.color = color;
+      pill.innerHTML = `<span>⚡</span><span>${text}</span>`;
+      container.appendChild(pill);
+      setTimeout(() => {
+        pill.style.opacity = '0';
+        pill.style.transition = 'opacity 0.5s ease';
+        setTimeout(() => pill.remove(), 500);
+      }, 2500);
+    }
+
+    /**
+     * RANKS & AVATAR FRAMES
+     */
+    const RANKS = [
+      { minXp: 0, title: 'Novice Geek', color: '#00f0ff' },
+      { minXp: 500, title: 'Code Prodigy', color: '#ff007f' },
+      { minXp: 1500, title: 'Cyber Scholar', color: '#00ff88' },
+      { minXp: 3500, title: 'Neural Maestro', color: '#ffde00' },
+      { minXp: 7500, title: 'Quantum Sage', color: '#9d00ff' },
+      { minXp: 15000, title: 'Quiz Grandmaster', color: '#ff6b00' }
+    ];
+
+    function getRank(xp) {
+      return [...RANKS].reverse().find(r => xp >= r.minXp) || RANKS[0];
+    }
+
+    const AVATAR_FRAMES = [
+      { id: 'NEON_CYAN', title: 'Neon Cyan', color: '#00f0ff', price: 0 },
+      { id: 'GLITCH_PINK', title: 'Glitch Pink', color: '#ff007f', price: 200 },
+      { id: 'GOLD_CHAMPION', title: 'Gold Champion', color: '#ffde00', price: 350 },
+      { id: 'QUANTUM_VOID', title: 'Quantum Void', color: '#9d00ff', price: 500 },
+      { id: 'SOLAR_FLAME', title: 'Solar Flame', color: '#ff6b00', price: 650 }
+    ];
+
+    /**
+     * CURRENT GAME RUN STATE
+     */
+    let game = {
+      active: false,
+      mode: 'classic', // classic, sudden, blitz
+      category: 'all',
+      questions: [],
+      currentIndex: 0,
+      score: 0,
+      streak: 0,
+      maxStreak: 0,
+      shieldActive: false,
+      timer: 15,
+      timerMax: 15,
+      timerFrozen: false,
+      freezeTimeLeft: 0,
+      interval: null,
+      answerLocked: false,
+      eliminatedIndices: [],
+      answersHistory: [],
+      fastestAnswer: 999,
+      startTime: 0,
+      sessionCoins: 0,
+      sessionXp: 0
+    };
+
+    /**
+     * NAVIGATION & SCREEN ROUTER
+     */
+    let currentScreen = 'welcome'; // welcome, home, playing, gameover, vault
+
+    function setScreen(screen) {
+      currentScreen = screen;
+      renderApp();
+    }
+
+    function applyTheme(themeId) {
+      state.theme = themeId;
+      document.body.className = `min-h-screen flex flex-col justify-between selection:bg-cyber-cyan selection:text-black theme-${themeId}`;
+      saveState();
+    }
+
+    /**
+     * GAME ENGINE LOGIC
+     */
+    function startNewGame(mode, category) {
+      sound.init();
+      sound.play(440, 'triangle', 0.2, 0.3, 400);
+
+      let pool = [...QUESTION_BANK];
+      if (category !== 'all') {
+        pool = pool.filter(q => q.category === category);
+      }
+      pool.sort(() => Math.random() - 0.5);
+
+      const limit = mode === 'classic' ? 10 : (mode === 'sudden' ? 30 : 40);
+      const chosen = pool.slice(0, limit);
+
+      const initTime = mode === 'classic' ? 15 : (mode === 'sudden' ? 12 : 60);
+
+      game = {
+        active: true,
+        mode: mode,
+        category: category,
+        questions: chosen,
+        currentIndex: 0,
+        score: 0,
+        streak: 0,
+        maxStreak: 0,
+        shieldActive: false,
+        timer: initTime,
+        timerMax: initTime,
+        timerFrozen: false,
+        freezeTimeLeft: 0,
+        interval: null,
+        answerLocked: false,
+        eliminatedIndices: [],
+        answersHistory: [],
+        fastestAnswer: 999,
+        startTime: Date.now(),
+        sessionCoins: 0,
+        sessionXp: 0
+      };
+
+      setScreen('playing');
+      startTimer();
+    }
+
+    function startTimer() {
+      clearInterval(game.interval);
+      game.interval = setInterval(() => {
+        if (!game.active || game.answerLocked) return;
+
+        if (game.timerFrozen) {
+          game.freezeTimeLeft -= 0.1;
+          if (game.freezeTimeLeft <= 0) {
+            game.timerFrozen = false;
+            showNotification('Cryo-Freeze Expired!', '#2979ff');
+          }
+          renderPlayingHud();
+          return;
+        }
+
+        game.timer -= 0.1;
+
+        if (game.timer <= 3.2 && game.timer > 0) {
+          if (Math.floor(game.timer * 10) % 10 === 0) {
+            sound.urgentTick();
+          }
+        }
+
+        if (game.timer <= 0) {
+          game.timer = 0;
+          clearInterval(game.interval);
+          handleTimeout();
+        }
+
+        renderPlayingHud();
+      }, 100);
+    }
+
+    function handleTimeout() {
+      sound.wrong();
+      const curQ = game.questions[game.currentIndex];
+      game.answersHistory.push({
+        prompt: curQ.prompt,
+        correctText: curQ.options[curQ.correct],
+        chosenText: 'TIMEOUT',
+        isCorrect: false,
+        timeSpent: game.timerMax
+      });
+
+      if (game.shieldActive) {
+        game.shieldActive = false;
+        showNotification('Aegis Shield Absorbed Timeout!', '#00f0ff');
+      } else {
+        game.streak = 0;
+      }
+
+      if (game.mode === 'sudden') {
+        endGame(false);
+      } else {
+        game.answerLocked = true;
+        renderApp();
+        setTimeout(() => advanceQuestion(), 2000);
+      }
+    }
+
+    function submitAnswer(chosenIdx) {
+      if (game.answerLocked) return;
+      game.answerLocked = true;
+      clearInterval(game.interval);
+
+      const curQ = game.questions[game.currentIndex];
+      const isCorrect = chosenIdx === curQ.correct;
+      const timeSpent = Math.max(0.1, (game.timerMax - game.timer));
+
+      if (timeSpent < game.fastestAnswer) {
+        game.fastestAnswer = timeSpent;
+      }
+
+      // Check Clutch Bonus (answered correctly with < 2 seconds on the clock)
+      const isClutch = isCorrect && game.timer <= 2.0 && !game.timerFrozen;
+
+      if (isCorrect) {
+        sound.correct();
+        triggerParticleBurst(window.innerWidth / 2, window.innerHeight * 0.45);
+
+        game.streak++;
+        if (game.streak > game.maxStreak) game.maxStreak = game.streak;
+        if (game.streak > state.streakRecord) state.streakRecord = game.streak;
+
+        const mult = 1.0 + Math.min(game.streak, 6) * 0.25;
+        const speedBonus = timeSpent < 3 ? 50 : (timeSpent < 6 ? 25 : 0);
+        const clutchBonusXp = isClutch ? 150 : 0;
+        const clutchBonusCoins = isClutch ? 25 : 0;
+
+        const baseScore = curQ.difficulty === 'HARD' ? 150 : (curQ.difficulty === 'MEDIUM' ? 100 : 60);
+        const earnedPoints = Math.round((baseScore + speedBonus) * mult);
+
+        game.score += earnedPoints;
+        const earnedCoins = 10 + (game.streak * 2) + clutchBonusCoins;
+        const earnedXp = Math.round(earnedPoints * 0.5) + clutchBonusXp;
+
+        game.sessionCoins += earnedCoins;
+        game.sessionXp += earnedXp;
+        state.coins += earnedCoins;
+        state.xp += earnedXp;
+
+        if (isClutch) {
+          sound.clutch();
+          showNotification('🔥 CLUTCH REFLEX! +150 XP!', '#ffde00');
+        } else if (game.streak % 3 === 0) {
+          sound.streak();
+          showNotification(`🔥 OVERDRIVE x${game.streak} STREAK!`, '#ffde00');
+        } else {
+          showNotification(`+${earnedPoints} PTS!`, '#00ff88');
+        }
+
+        // Mystery loot box every 5 correct
+        const totalCorrect = game.answersHistory.filter(a => a.isCorrect).length + 1;
+        if (totalCorrect % 5 === 0) {
+          state.lootBoxes++;
+          sound.unbox();
+          showNotification('🎁 MYSTERY LOOT BOX EARNED!', '#ffde00');
+        }
+      } else {
+        sound.wrong();
+        const mainCard = document.getElementById('questionMainCard');
+        if (mainCard) {
+          mainCard.classList.add('animate-shake');
+          setTimeout(() => mainCard.classList.remove('animate-shake'), 450);
+        }
+
+        if (game.shieldActive) {
+          game.shieldActive = false;
+          showNotification('🛡️ Aegis Shield Protected Streak!', '#00f0ff');
+        } else {
+          game.streak = 0;
+        }
+
+        if (game.mode === 'sudden') {
+          saveState();
+          game.answersHistory.push({
+            prompt: curQ.prompt,
+            correctText: curQ.options[curQ.correct],
+            chosenText: curQ.options[chosenIdx],
+            isCorrect: false,
+            timeSpent: timeSpent
+          });
+          setTimeout(() => endGame(false), 1400);
+          return;
+        }
+      }
+
+      saveState();
+
+      game.answersHistory.push({
+        prompt: curQ.prompt,
+        correctText: curQ.options[curQ.correct],
+        chosenText: curQ.options[chosenIdx],
+        isCorrect: isCorrect,
+        timeSpent: timeSpent
+      });
+
+      renderApp();
+      setTimeout(() => advanceQuestion(), 2400);
+    }
+
+    function advanceQuestion() {
+      game.currentIndex++;
+      if (game.currentIndex >= game.questions.length) {
+        endGame(true);
+      } else {
+        game.answerLocked = false;
+        game.eliminatedIndices = [];
+
+        if (game.mode === 'classic') {
+          // Escalating timer: starts at 15 down to 5 seconds
+          const step = Math.min(game.currentIndex, 8);
+          game.timer = Math.max(5, 15 - step * 1.2);
+          game.timerMax = game.timer;
+        } else if (game.mode === 'sudden') {
+          game.timer = Math.max(6, 12 - game.currentIndex * 0.2);
+          game.timerMax = game.timer;
+        }
+        // Blitz timer continues running down from 60
+
+        renderApp();
+        startTimer();
+      }
+    }
+
+    function endGame(isVictory) {
+      game.active = false;
+      clearInterval(game.interval);
+      saveState();
+      sound.play(523.25, 'triangle', 0.2, 0.3);
+      setTimeout(() => sound.play(783.99, 'triangle', 0.35, 0.35), 150);
+      setScreen('gameover');
+    }
+
+    // Power-up triggers
+    function usePowerUp(type) {
+      if (game.answerLocked || !game.active) return;
+      if (state.powerups[type] <= 0) {
+        showNotification('No charges remaining! Visit Armory.', '#ff2a55');
+        sound.wrong();
+        return;
+      }
+
+      const curQ = game.questions[game.currentIndex];
+
+      if (type === 'fifty') {
+        if (game.eliminatedIndices.length > 0) return;
+        state.powerups.fifty--;
+        sound.powerup();
+        const wrongIndices = [0, 1, 2, 3].filter(idx => idx !== curQ.correct);
+        wrongIndices.sort(() => Math.random() - 0.5);
+        game.eliminatedIndices = wrongIndices.slice(0, 2);
+        showNotification('⚡ 50/50 Glitched 2 Wrong Choices!', '#ff007f');
+      } else if (type === 'freeze') {
+        if (game.timerFrozen) return;
+        state.powerups.freeze--;
+        sound.powerup();
+        game.timerFrozen = true;
+        game.freezeTimeLeft = 5.0;
+        showNotification('❄️ Chrono Freeze: 5 Seconds Gained!', '#2979ff');
+      } else if (type === 'shield') {
+        if (game.shieldActive) return;
+        state.powerups.shield--;
+        sound.powerup();
+        game.shieldActive = true;
+        showNotification('🛡️ Aegis Shield Activated!', '#00f0ff');
+      }
+
+      saveState();
+      renderApp();
+    }
+
+    function openLootBox() {
+      if (state.lootBoxes <= 0) {
+        showNotification('No Mystery Loot Boxes available!', '#ff2a55');
+        return;
+      }
+      state.lootBoxes--;
+      sound.unbox();
+      triggerParticleBurst(window.innerWidth / 2, window.innerHeight / 2, 45, ['#ffde00', '#ff007f', '#00f0ff']);
+
+      const coins = Math.floor(Math.random() * 200) + 120;
+      const xp = Math.floor(Math.random() * 150) + 80;
+      const powerupTypes = ['fifty', 'freeze', 'shield'];
+      const pType = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
+      state.coins += coins;
+      state.xp += xp;
+      state.powerups[pType]++;
+      saveState();
+
+      renderLootBoxModal(coins, xp, pType);
+    }
+
+    /**
+     * UI RENDERING COMPONENTS
+     */
+    function renderApp() {
+      const app = document.getElementById('app');
+      if (currentScreen === 'welcome') {
+        app.innerHTML = renderWelcomeScreen();
+      } else if (currentScreen === 'home') {
+        app.innerHTML = renderHomeScreen();
+      } else if (currentScreen === 'playing') {
+        app.innerHTML = renderGamePlayScreen();
+      } else if (currentScreen === 'gameover') {
+        app.innerHTML = renderGameOverScreen();
+      } else if (currentScreen === 'vault') {
+        app.innerHTML = renderVaultScreen();
+      }
+    }
+
+    // 1. WELCOME SCREEN
+    function renderWelcomeScreen() {
+      const rank = getRank(state.xp);
+      const frame = AVATAR_FRAMES.find(f => f.id === state.avatarFrame) || AVATAR_FRAMES[0];
+
+      return `
+        <div class="flex-1 flex flex-col justify-between items-center text-center py-6 animate-fadeIn">
+          <div class="w-full flex flex-col items-center">
+            <!-- Animated Lightning Badge ⚡ -->
+            <div class="relative mb-4">
+              <div class="w-24 h-24 rounded-full flex items-center justify-center border-2 border-cyber-yellow bg-cyber-yellow/10 animate-pulse-fast shadow-[0_0_35px_rgba(255,222,0,0.6)]">
+                <span class="text-5xl">⚡</span>
+              </div>
+            </div>
+
+            <!-- QuizRush Title -->
+            <h1 class="text-4xl sm:text-5xl font-arcade font-black tracking-widest text-cyber-cyan neon-text-cyan">
+              QUIZRUSH
+            </h1>
+
+            <!-- MANDATORY CREATOR CREDIT -->
+            <div class="mt-2 inline-flex items-center gap-2 px-4 py-1 rounded-full bg-cyber-card border border-cyber-pink/60 shadow-[0_0_15px_rgba(255,0,127,0.3)]">
+              <span class="text-cyber-pink text-xs">⚡</span>
+              <span class="text-xs sm:text-sm font-bold tracking-wide italic text-cyber-pink">Created by Jessie Israel</span>
+            </div>
+
+            <p class="mt-3 text-xs tracking-widest text-slate-400 font-bold uppercase">
+              Hyper-Speed Cyber Trivia Showdown
+            </p>
+
+            <!-- Pilot Identity Card -->
+            <div class="w-full mt-6 glass-panel rounded-2xl p-4 border border-cyber-cyan/30 text-left">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-arcade font-bold tracking-wider text-slate-400 uppercase">PILOT CALLSIGN</span>
+                <span class="text-[11px] font-bold text-cyber-yellow">${state.coins} COINS 🪙</span>
+              </div>
+              <div class="flex items-center gap-3 mt-3">
+                <div class="w-12 h-12 rounded-full flex items-center justify-center font-arcade font-black text-lg border-2" style="border-color: ${frame.color}; color: ${frame.color};">
+                  ${(state.playerName || 'C').charAt(0).toUpperCase()}
+                </div>
+                <div class="flex-1">
+                  <input id="pilotNameInput" type="text" value="${state.playerName}" maxlength="16" class="w-full bg-cyber-surface px-3 py-1.5 rounded-lg border border-slate-700 text-slate-200 text-sm font-bold focus:border-cyber-cyan outline-none" placeholder="Enter Callsign..." />
+                </div>
+              </div>
+              <div class="mt-3 flex items-center justify-between text-xs pt-2 border-t border-slate-800">
+                <span class="font-bold uppercase" style="color: ${rank.color}">RANK: ${rank.title}</span>
+                <span class="text-slate-400 font-semibold">${state.xp} XP</span>
+              </div>
+            </div>
+
+            <!-- Features Highlights -->
+            <div class="grid grid-cols-3 gap-2 w-full mt-4 text-center">
+              <div class="glass-panel p-2.5 rounded-xl border border-cyber-cyan/30">
+                <div class="text-base text-cyber-cyan">🧠</div>
+                <div class="text-[11px] font-arcade font-bold text-cyber-cyan mt-1">6 DOMAINS</div>
+                <div class="text-[9px] text-slate-400">Tech to Riddles</div>
+              </div>
+              <div class="glass-panel p-2.5 rounded-xl border border-cyber-pink/30">
+                <div class="text-base text-cyber-pink">⏱️</div>
+                <div class="text-[11px] font-arcade font-bold text-cyber-pink mt-1">3 MODES</div>
+                <div class="text-[9px] text-slate-400">Classic, Sudden, Blitz</div>
+              </div>
+              <div class="glass-panel p-2.5 rounded-xl border border-cyber-yellow/30">
+                <div class="text-base text-cyber-yellow">🎁</div>
+                <div class="text-[11px] font-arcade font-bold text-cyber-yellow mt-1">MYSTERY LOOT</div>
+                <div class="text-[9px] text-slate-400">Every 5 correct</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ENTER THE RUSH BUTTON -->
+          <div class="w-full mt-6">
+            <button onclick="handleEnterRush()" class="w-full py-4 rounded-xl bg-cyber-cyan hover:bg-cyan-300 text-black font-arcade font-black text-lg tracking-widest shadow-[0_0_25px_rgba(0,240,255,0.7)] transition active:scale-95 flex items-center justify-center gap-2">
+              <span>▶</span>
+              <span>ENTER THE RUSH</span>
+            </button>
+            <div class="mt-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+              TAP TO INITIALIZE NEURAL LINK
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function handleEnterRush() {
+      const input = document.getElementById('pilotNameInput');
+      if (input && input.value.trim()) {
+        state.playerName = input.value.trim();
+        saveState();
+      }
+      sound.powerup();
+      setScreen('home');
+    }
+
+    // 2. HOME SCREEN / MISSION DASHBOARD
+    function renderHomeScreen() {
+      const rank = getRank(state.xp);
+      const frame = AVATAR_FRAMES.find(f => f.id === state.avatarFrame) || AVATAR_FRAMES[0];
+
+      return `
+        <div class="flex-1 flex flex-col gap-4 py-2 animate-fadeIn">
+          <!-- Top Status Bar -->
+          <div class="flex items-center justify-between glass-panel p-3 rounded-2xl">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center font-arcade font-bold text-base border-2" style="border-color: ${frame.color}; color: ${frame.color};">
+                ${(state.playerName || 'C').charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div class="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+                  <span>${state.playerName}</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-cyber-yellow">D${state.dailyStreak} 🔥</span>
+                </div>
+                <div class="text-[11px] font-semibold" style="color: ${rank.color}">${rank.title}</div>
+              </div>
+            </div>
+
+            <!-- Currency & Vault Button -->
+            <div class="flex items-center gap-2">
+              <div class="px-2.5 py-1 rounded-lg bg-cyber-surface border border-slate-700 flex items-center gap-1 text-xs font-bold text-cyber-yellow">
+                <span>🪙</span>
+                <span>${state.coins}</span>
+              </div>
+              <button onclick="setScreen('vault')" class="px-3 py-1 rounded-lg bg-cyber-pink/20 border border-cyber-pink hover:bg-cyber-pink/40 text-cyber-pink text-xs font-bold transition">
+                ARMORY
+              </button>
+            </div>
+          </div>
+
+          <!-- Mystery Loot Box Drop Alert if Available -->
+          ${state.lootBoxes > 0 ? `
+            <div onclick="openLootBox()" class="cursor-pointer glass-panel p-3 rounded-xl border border-cyber-yellow bg-cyber-yellow/10 flex items-center justify-between hover:bg-cyber-yellow/20 transition">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl animate-bounce">🎁</span>
+                <div>
+                  <div class="text-xs font-arcade font-bold text-cyber-yellow">MYSTERY LOOT READY (x${state.lootBoxes})</div>
+                  <div class="text-[10px] text-slate-300">Tap to unbox coins, XP, and tactical gear!</div>
+                </div>
+              </div>
+              <span class="text-xs font-arcade font-black px-2.5 py-1 rounded bg-cyber-yellow text-black">OPEN</span>
+            </div>
+          ` : ''}
+
+          <!-- GAME MODE SELECTION -->
+          <div>
+            <div class="text-xs font-arcade font-bold text-slate-400 tracking-wider mb-2 uppercase">SELECT GAME MODE</div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <button onclick="startNewGame('classic', 'all')" class="glass-panel p-3 rounded-xl border border-cyber-cyan/50 hover:border-cyber-cyan text-left transition group active:scale-98">
+                <div class="flex items-center justify-between">
+                  <span class="text-xl">⚡</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyber-cyan/20 text-cyber-cyan font-bold">10 Qs</span>
+                </div>
+                <div class="font-arcade font-bold text-sm text-cyber-cyan mt-1 group-hover:neon-text-cyan">CLASSIC RUSH</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Escalating timer (15s to 5s) & streak multipliers</div>
+              </button>
+
+              <button onclick="startNewGame('sudden', 'all')" class="glass-panel p-3 rounded-xl border border-cyber-pink/50 hover:border-cyber-pink text-left transition group active:scale-98">
+                <div class="flex items-center justify-between">
+                  <span class="text-xl">💀</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyber-pink/20 text-cyber-pink font-bold">ENDLESS</span>
+                </div>
+                <div class="font-arcade font-bold text-sm text-cyber-pink mt-1 group-hover:neon-text-pink">SUDDEN DEATH</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">One wrong answer or timeout is instant game over</div>
+              </button>
+
+              <button onclick="startNewGame('blitz', 'all')" class="glass-panel p-3 rounded-xl border border-cyber-yellow/50 hover:border-cyber-yellow text-left transition group active:scale-98">
+                <div class="flex items-center justify-between">
+                  <span class="text-xl">⏳</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyber-yellow/20 text-cyber-yellow font-bold">60 SEC</span>
+                </div>
+                <div class="font-arcade font-bold text-sm text-cyber-yellow mt-1 group-hover:neon-text-yellow">BLITZ ATTACK</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Max questions answered in 60 seconds of adrenaline</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- CATEGORY DOMAINS -->
+          <div class="mt-2">
+            <div class="text-xs font-arcade font-bold text-slate-400 tracking-wider mb-2 uppercase">SELECT TRIVIA SECTOR</div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <button onclick="startNewGame('classic', 'tech')" class="glass-panel p-2.5 rounded-xl border border-cyan-500/40 text-left hover:border-cyan-400 transition">
+                <div class="text-cyan-400 text-sm font-bold flex items-center gap-1.5"><span>💻</span> Tech & Coding</div>
+                <div class="text-[10px] text-slate-400">Algorithms, Silicon</div>
+              </button>
+              <button onclick="startNewGame('classic', 'pop')" class="glass-panel p-2.5 rounded-xl border border-pink-500/40 text-left hover:border-pink-400 transition">
+                <div class="text-pink-400 text-sm font-bold flex items-center gap-1.5"><span>🎮</span> Pop Culture</div>
+                <div class="text-[10px] text-slate-400">Movies, AAA Games</div>
+              </button>
+              <button onclick="startNewGame('classic', 'science')" class="glass-panel p-2.5 rounded-xl border border-green-500/40 text-left hover:border-green-400 transition">
+                <div class="text-green-400 text-sm font-bold flex items-center gap-1.5"><span>🔬</span> Science & Cosmos</div>
+                <div class="text-[10px] text-slate-400">Physics, Deep Space</div>
+              </button>
+              <button onclick="startNewGame('classic', 'history')" class="glass-panel p-2.5 rounded-xl border border-amber-500/40 text-left hover:border-amber-400 transition">
+                <div class="text-amber-400 text-sm font-bold flex items-center gap-1.5"><span>📜</span> History & Lore</div>
+                <div class="text-[10px] text-slate-400">Ancient, World Myth</div>
+              </button>
+              <button onclick="startNewGame('classic', 'geo')" class="glass-panel p-2.5 rounded-xl border border-blue-500/40 text-left hover:border-blue-400 transition">
+                <div class="text-blue-400 text-sm font-bold flex items-center gap-1.5"><span>🌍</span> Geopolitics</div>
+                <div class="text-[10px] text-slate-400">Flags & Capitals</div>
+              </button>
+              <button onclick="startNewGame('classic', 'riddle')" class="glass-panel p-2.5 rounded-xl border border-purple-500/40 text-left hover:border-purple-400 transition">
+                <div class="text-purple-400 text-sm font-bold flex items-center gap-1.5"><span>🧩</span> Mind Benders</div>
+                <div class="text-[10px] text-slate-400">Logic Puzzles</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Creator & Game Footer Tag -->
+          <div class="mt-auto text-center pt-4 pb-2 border-t border-slate-800">
+            <div class="text-xs text-cyber-pink font-bold italic tracking-wide">
+              ⚡ QUIZRUSH · Created by Jessie Israel
+            </div>
+            <div class="text-[10px] text-slate-500 mt-0.5">
+              Streak Record: ${state.streakRecord}x 🔥 · Total XP: ${state.xp}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // 3. GAMEPLAY SCREEN
+    function renderGamePlayScreen() {
+      const curQ = game.questions[game.currentIndex];
+      const isOverdrive = game.streak >= 3;
+      const progressPercent = Math.max(0, Math.min(100, (game.timer / game.timerMax) * 100));
+
+      return `
+        <div class="flex-1 flex flex-col justify-between py-2 animate-fadeIn">
+          <!-- Top HUD -->
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <button onclick="handleQuitGame()" class="text-xs text-slate-400 hover:text-white px-2 py-1 rounded bg-cyber-card">
+                ✕ QUIT
+              </button>
+              <div class="px-3 py-1 rounded-full bg-cyber-card text-[11px] font-arcade font-bold text-cyber-cyan uppercase">
+                ${game.mode} · Q ${game.currentIndex + 1}/${game.questions.length}
+              </div>
+              <div class="text-sm font-arcade font-bold text-cyber-yellow">
+                ${game.score} PTS
+              </div>
+            </div>
+
+            <!-- Streak & Shield Banner -->
+            <div class="flex items-center justify-between text-xs px-1">
+              <div class="flex items-center gap-1.5 font-bold ${isOverdrive ? 'text-cyber-yellow animate-pulse-fast' : 'text-slate-400'}">
+                <span>🔥</span>
+                <span>STREAK: ${game.streak}x (${(1 + Math.min(game.streak, 6) * 0.25).toFixed(2)}x)</span>
+              </div>
+              ${game.shieldActive ? `
+                <div class="text-[11px] font-bold text-cyber-cyan bg-cyber-cyan/10 px-2 py-0.5 rounded border border-cyber-cyan">
+                  🛡️ SHIELD ACTIVE
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- Timer Bar -->
+            <div id="hudTimerContainer" class="w-full">
+              <div class="flex justify-between text-[11px] font-bold mb-1">
+                <span id="timerLabel" class="${game.timer <= 3 ? 'text-cyber-red animate-pulse' : 'text-cyber-cyan'}">
+                  ${game.timerFrozen ? `❄️ FROZEN (${game.freezeTimeLeft.toFixed(1)}s)` : `TIME: ${game.timer.toFixed(1)}s`}
+                </span>
+                <span class="text-slate-500">${curQ.difficulty}</span>
+              </div>
+              <div class="w-full h-2 rounded-full bg-cyber-card overflow-hidden">
+                <div id="timerBar" class="h-full transition-all duration-100 ${game.timer <= 3 ? 'bg-cyber-red' : (game.timerFrozen ? 'bg-cyber-blue' : 'bg-cyber-cyan')}" style="width: ${progressPercent}%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- QUESTION CONTAINER (with Streak Flame Glow on 3+) -->
+          <div id="questionMainCard" class="glass-panel p-5 rounded-2xl border my-auto transition-all ${isOverdrive ? 'streak-flame-glow' : 'border-cyber-cyan/30'}">
+            ${isOverdrive ? `
+              <div class="text-center text-xs font-arcade font-black text-cyber-yellow mb-2 tracking-widest animate-pulse">
+                🔥 OVERDRIVE ACTIVE · ${game.streak}X STREAK MULTIPLIER 🔥
+              </div>
+            ` : ''}
+
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">${curQ.category.toUpperCase()}</div>
+            <h2 class="text-lg sm:text-xl font-bold text-slate-100 leading-snug mb-5">${curQ.prompt}</h2>
+
+            <!-- 4 Options -->
+            <div class="flex flex-col gap-2.5">
+              ${curQ.options.map((opt, idx) => {
+                const isEliminated = game.eliminatedIndices.includes(idx);
+                let btnStyle = "glass-panel text-slate-200 border-slate-700 hover:border-cyber-cyan";
+                let badge = `<span class="w-6 h-6 rounded-full bg-slate-800 text-xs flex items-center justify-center font-bold text-slate-400">${String.fromCharCode(65 + idx)}</span>`;
+
+                if (game.answerLocked) {
+                  if (idx === curQ.correct) {
+                    btnStyle = "bg-cyber-green/30 border-cyber-green text-white font-bold shadow-[0_0_15px_rgba(0,255,136,0.5)]";
+                    badge = `<span class="w-6 h-6 rounded-full bg-cyber-green text-black text-xs flex items-center justify-center font-bold">✓</span>`;
+                  } else if (game.answersHistory.length > 0 && game.answersHistory[game.answersHistory.length - 1].chosenText === opt) {
+                    btnStyle = "bg-cyber-red/30 border-cyber-red text-white font-bold shadow-[0_0_15px_rgba(255,42,85,0.5)]";
+                    badge = `<span class="w-6 h-6 rounded-full bg-cyber-red text-white text-xs flex items-center justify-center font-bold">✕</span>`;
+                  }
+                }
+
+                if (isEliminated) {
+                  return `
+                    <div class="p-3.5 rounded-xl border border-slate-800 opacity-20 line-through text-slate-600 flex items-center gap-3">
+                      ${badge}
+                      <span class="text-sm font-semibold">${opt}</span>
+                    </div>
+                  `;
+                }
+
+                return `
+                  <button onclick="submitAnswer(${idx})" ${game.answerLocked ? 'disabled' : ''} class="w-full p-3.5 rounded-xl border text-left flex items-center gap-3 transition-all active:scale-98 ${btnStyle}">
+                    ${badge}
+                    <span class="text-sm font-semibold flex-1">${opt}</span>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+
+            <!-- "Did You Know?" Educational Revelation after Answering -->
+            ${game.answerLocked ? `
+              <div class="mt-4 pt-3 border-t border-slate-700/80 animate-fadeIn">
+                <div class="inline-block px-2 py-0.5 rounded bg-cyber-yellow/20 text-cyber-yellow font-bold text-[10px] tracking-wide mb-1">
+                  ⚡ DID YOU KNOW?
+                </div>
+                <div class="text-xs text-slate-200 font-bold mb-1">${curQ.funFact}</div>
+                <div class="text-[11px] text-slate-400">${curQ.explanation}</div>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- POWER-UP ARSENAL -->
+          <div class="mt-2">
+            <div class="text-[10px] font-arcade font-bold text-slate-400 tracking-wider mb-1.5 uppercase">POWER-UP ARSENAL</div>
+            <div class="grid grid-cols-3 gap-2">
+              <button onclick="usePowerUp('fifty')" ${game.answerLocked || state.powerups.fifty <= 0 || game.eliminatedIndices.length > 0 ? 'disabled' : ''} class="glass-panel p-2 rounded-xl border border-cyber-pink/50 hover:border-cyber-pink disabled:opacity-40 flex items-center justify-between text-xs transition">
+                <div class="text-left">
+                  <div class="font-bold text-cyber-pink">50/50</div>
+                  <div class="text-[9px] text-slate-400">Eliminate 2</div>
+                </div>
+                <span class="text-xs px-1.5 py-0.5 rounded bg-cyber-pink/20 text-cyber-pink font-bold">x${state.powerups.fifty}</span>
+              </button>
+
+              <button onclick="usePowerUp('freeze')" ${game.answerLocked || state.powerups.freeze <= 0 || game.timerFrozen ? 'disabled' : ''} class="glass-panel p-2 rounded-xl border border-cyber-blue/50 hover:border-cyber-blue disabled:opacity-40 flex items-center justify-between text-xs transition">
+                <div class="text-left">
+                  <div class="font-bold text-cyber-blue">FREEZE</div>
+                  <div class="text-[9px] text-slate-400">+5s Pause</div>
+                </div>
+                <span class="text-xs px-1.5 py-0.5 rounded bg-cyber-blue/20 text-cyber-blue font-bold">x${state.powerups.freeze}</span>
+              </button>
+
+              <button onclick="usePowerUp('shield')" ${game.answerLocked || state.powerups.shield <= 0 || game.shieldActive ? 'disabled' : ''} class="glass-panel p-2 rounded-xl border border-cyber-cyan/50 hover:border-cyber-cyan disabled:opacity-40 flex items-center justify-between text-xs transition">
+                <div class="text-left">
+                  <div class="font-bold text-cyber-cyan">SHIELD</div>
+                  <div class="text-[9px] text-slate-400">Streak Save</div>
+                </div>
+                <span class="text-xs px-1.5 py-0.5 rounded bg-cyber-cyan/20 text-cyber-cyan font-bold">x${state.powerups.shield}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderPlayingHud() {
+      const bar = document.getElementById('timerBar');
+      const label = document.getElementById('timerLabel');
+      if (bar && label) {
+        const pct = Math.max(0, Math.min(100, (game.timer / game.timerMax) * 100));
+        bar.style.width = `${pct}%`;
+        label.innerText = game.timerFrozen ? `❄️ FROZEN (${game.freezeTimeLeft.toFixed(1)}s)` : `TIME: ${game.timer.toFixed(1)}s`;
+      }
+    }
+
+    function handleQuitGame() {
+      if (confirm('Abandon current QuizRush run?')) {
+        clearInterval(game.interval);
+        game.active = false;
+        setScreen('home');
+      }
+    }
+
+    // 4. GAME OVER & ANALYTICS DASHBOARD
+    function renderGameOverScreen() {
+      const total = game.answersHistory.length;
+      const correct = game.answersHistory.filter(a => a.isCorrect).length;
+      const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+      const avgSpeed = total > 0 ? (game.answersHistory.reduce((acc, c) => acc + c.timeSpent, 0) / total).toFixed(2) : '0.00';
+
+      let grade = 'C';
+      let ratingStatement = 'NEURAL REBOOT REQUIRED';
+      let gradeColor = '#ff2a55';
+
+      if (accuracy >= 90 && avgSpeed < 4.5) {
+        grade = 'S+';
+        ratingStatement = 'GODLIKE SYNAPSE OVERLOAD';
+        gradeColor = '#ffde00';
+      } else if (accuracy >= 80) {
+        grade = 'S';
+        ratingStatement = 'CYBER ELITE OPERATIVE';
+        gradeColor = '#00f0ff';
+      } else if (accuracy >= 65) {
+        grade = 'A';
+        ratingStatement = 'SHARP TACTICAL RUNNER';
+        gradeColor = '#00ff88';
+      } else if (accuracy >= 50) {
+        grade = 'B';
+        ratingStatement = 'NEURAL APPRENTICE';
+        gradeColor = '#2979ff';
+      }
+
+      return `
+        <div class="flex-1 flex flex-col justify-between py-2 animate-fadeIn">
+          <div>
+            <!-- Header Result Badge -->
+            <div class="text-center my-3">
+              <div class="inline-block px-4 py-1 rounded-full text-xs font-arcade font-black uppercase mb-1" style="background: ${gradeColor}20; color: ${gradeColor}; border: 1px solid ${gradeColor}">
+                GRADE: ${grade} · ${ratingStatement}
+              </div>
+              <h1 class="text-4xl font-arcade font-black text-slate-100">
+                ${game.score} <span class="text-base text-cyber-cyan">PTS</span>
+              </h1>
+            </div>
+
+            <!-- Analytics Dashboard Grid -->
+            <div class="glass-panel p-4 rounded-2xl border border-cyber-cyan/40">
+              <div class="text-xs font-arcade font-bold text-slate-400 mb-3 uppercase tracking-wider">
+                TACTICAL RUN METRICS
+              </div>
+
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                <div class="bg-cyber-surface p-2.5 rounded-xl border border-slate-800">
+                  <div class="text-[10px] text-slate-400 font-bold uppercase">ACCURACY</div>
+                  <div class="text-lg font-arcade font-black text-cyber-green mt-0.5">${accuracy}%</div>
+                  <div class="text-[9px] text-slate-500">${correct}/${total} Answered</div>
+                </div>
+
+                <div class="bg-cyber-surface p-2.5 rounded-xl border border-slate-800">
+                  <div class="text-[10px] text-slate-400 font-bold uppercase">AVG SPEED</div>
+                  <div class="text-lg font-arcade font-black text-cyber-cyan mt-0.5">${avgSpeed}s</div>
+                  <div class="text-[9px] text-slate-500">Per Question</div>
+                </div>
+
+                <div class="bg-cyber-surface p-2.5 rounded-xl border border-slate-800">
+                  <div class="text-[10px] text-slate-400 font-bold uppercase">MAX STREAK</div>
+                  <div class="text-lg font-arcade font-black text-cyber-yellow mt-0.5">${game.maxStreak}x 🔥</div>
+                  <div class="text-[9px] text-slate-500">Multiplier Peak</div>
+                </div>
+
+                <div class="bg-cyber-surface p-2.5 rounded-xl border border-slate-800">
+                  <div class="text-[10px] text-slate-400 font-bold uppercase">FASTEST HIT</div>
+                  <div class="text-lg font-arcade font-black text-cyber-pink mt-0.5">${game.fastestAnswer < 50 ? game.fastestAnswer.toFixed(2) + 's' : '-'}</div>
+                  <div class="text-[9px] text-slate-500">Reflex Peak</div>
+                </div>
+              </div>
+
+              <!-- Rewards Earned Strip -->
+              <div class="mt-3 pt-3 border-t border-slate-800 flex items-center justify-around text-xs font-bold">
+                <span class="text-cyber-yellow flex items-center gap-1">🪙 +${game.sessionCoins} Coins</span>
+                <span class="text-cyber-cyan flex items-center gap-1">⚡ +${game.sessionXp} XP</span>
+              </div>
+            </div>
+
+            <!-- Expandable Review Section -->
+            <div class="mt-3">
+              <button onclick="toggleReviewDetails()" class="w-full glass-panel py-2 px-3 rounded-xl border border-slate-800 flex items-center justify-between text-xs font-bold text-slate-300">
+                <span>VIEW QUESTIONS BREAKDOWN (${total})</span>
+                <span id="reviewArrow">▼</span>
+              </button>
+              <div id="reviewDetails" class="hidden flex-col gap-2 mt-2 max-h-48 overflow-y-auto pr-1">
+                ${game.answersHistory.map((item, i) => `
+                  <div class="p-2.5 rounded-lg border text-xs ${item.isCorrect ? 'bg-cyber-green/10 border-cyber-green/40' : 'bg-cyber-red/10 border-cyber-red/40'}">
+                    <div class="font-bold text-slate-200">#${i + 1}: ${item.prompt}</div>
+                    <div class="text-[11px] text-slate-400 mt-1">
+                      Your answer: <span class="${item.isCorrect ? 'text-cyber-green font-bold' : 'text-cyber-red font-bold'}">${item.chosenText}</span>
+                      ${!item.isCorrect ? ` · Correct: <span class="text-cyber-green font-bold">${item.correctText}</span>` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Actions: Play Again, Flex Card, Home -->
+          <div class="flex flex-col gap-2 mt-4">
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="startNewGame(game.mode, game.category)" class="w-full py-3.5 rounded-xl bg-cyber-cyan hover:bg-cyan-300 text-black font-arcade font-bold text-sm tracking-wider shadow-[0_0_20px_rgba(0,240,255,0.5)] transition active:scale-95 flex items-center justify-center gap-2">
+                <span>↺</span> PLAY AGAIN
+              </button>
+              <button onclick="openFlexCardModal('${grade}', '${ratingStatement}', ${accuracy}, '${avgSpeed}')" class="w-full py-3.5 rounded-xl bg-cyber-yellow hover:bg-yellow-300 text-black font-arcade font-bold text-sm tracking-wider shadow-[0_0_20px_rgba(255,222,0,0.5)] transition active:scale-95 flex items-center justify-center gap-1.5">
+                <span>🏆</span> FLEX CARD
+              </button>
+            </div>
+            <button onclick="setScreen('home')" class="w-full py-2.5 rounded-xl glass-panel text-slate-300 hover:text-white font-bold text-xs tracking-wider transition">
+              RETURN TO DASHBOARD
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function toggleReviewDetails() {
+      const details = document.getElementById('reviewDetails');
+      const arrow = document.getElementById('reviewArrow');
+      if (details) {
+        details.classList.toggle('hidden');
+        details.classList.toggle('flex');
+        arrow.innerText = details.classList.contains('hidden') ? '▼' : '▲';
+      }
+    }
+
+    // 5. VAULT / ARMORY SCREEN
+    function renderVaultScreen() {
+      return `
+        <div class="flex-1 flex flex-col justify-between py-2 animate-fadeIn">
+          <div>
+            <!-- Header -->
+            <div class="flex items-center justify-between glass-panel p-3 rounded-2xl mb-3">
+              <button onclick="setScreen('home')" class="text-xs font-bold text-slate-400 hover:text-white px-2 py-1 rounded bg-cyber-surface">
+                ← BACK
+              </button>
+              <h2 class="text-sm font-arcade font-bold text-cyber-cyan uppercase">VAULT & ARMORY</h2>
+              <div class="text-xs font-bold text-cyber-yellow">🪙 ${state.coins}</div>
+            </div>
+
+            <!-- Theme Switcher -->
+            <div class="mb-4">
+              <div class="text-xs font-arcade font-bold text-slate-400 uppercase mb-2">HOLOGRAPHIC THEMES</div>
+              <div class="grid grid-cols-3 gap-2">
+                <button onclick="applyTheme('cyberpunk')" class="p-2.5 rounded-xl border text-left text-xs font-bold transition ${state.theme === 'cyberpunk' ? 'border-cyber-cyan bg-cyber-cyan/20 text-cyber-cyan' : 'glass-panel text-slate-400 border-slate-800'}">
+                  <div>CYBERPUNK</div>
+                  <div class="text-[9px] text-slate-500">Neon Arcade</div>
+                </button>
+                <button onclick="applyTheme('vaporwave')" class="p-2.5 rounded-xl border text-left text-xs font-bold transition ${state.theme === 'vaporwave' ? 'border-pink-500 bg-pink-500/20 text-pink-400' : 'glass-panel text-slate-400 border-slate-800'}">
+                  <div>VAPORWAVE</div>
+                  <div class="text-[9px] text-slate-500">Retro Synth</div>
+                </button>
+                <button onclick="applyTheme('midnight')" class="p-2.5 rounded-xl border text-left text-xs font-bold transition ${state.theme === 'midnight' ? 'border-green-400 bg-green-400/20 text-green-400' : 'glass-panel text-slate-400 border-slate-800'}">
+                  <div>MIDNIGHT</div>
+                  <div class="text-[9px] text-slate-500">Pure OLED</div>
+                </button>
+              </div>
+            </div>
+
+            <!-- Tactical Power-Up Shop -->
+            <div class="mb-4">
+              <div class="text-xs font-arcade font-bold text-slate-400 uppercase mb-2">RESTOCK POWER-UPS (75 COINS EACH)</div>
+              <div class="flex flex-col gap-2">
+                <div class="glass-panel p-3 rounded-xl border border-cyber-pink/40 flex items-center justify-between">
+                  <div class="text-left">
+                    <div class="text-xs font-bold text-cyber-pink">50/50 Glitch Eliminator</div>
+                    <div class="text-[10px] text-slate-400">Current Stock: ${state.powerups.fifty}</div>
+                  </div>
+                  <button onclick="buyPowerUp('fifty', 75)" class="px-3 py-1.5 rounded-lg bg-cyber-pink hover:bg-pink-600 text-black font-arcade font-black text-xs transition">
+                    BUY 75🪙
+                  </button>
+                </div>
+
+                <div class="glass-panel p-3 rounded-xl border border-cyber-blue/40 flex items-center justify-between">
+                  <div class="text-left">
+                    <div class="text-xs font-bold text-cyber-blue">Chrono Freeze (+5s)</div>
+                    <div class="text-[10px] text-slate-400">Current Stock: ${state.powerups.freeze}</div>
+                  </div>
+                  <button onclick="buyPowerUp('freeze', 75)" class="px-3 py-1.5 rounded-lg bg-cyber-blue hover:bg-blue-600 text-black font-arcade font-black text-xs transition">
+                    BUY 75🪙
+                  </button>
+                </div>
+
+                <div class="glass-panel p-3 rounded-xl border border-cyber-cyan/40 flex items-center justify-between">
+                  <div class="text-left">
+                    <div class="text-xs font-bold text-cyber-cyan">Aegis Streak Shield</div>
+                    <div class="text-[10px] text-slate-400">Current Stock: ${state.powerups.shield}</div>
+                  </div>
+                  <button onclick="buyPowerUp('shield', 75)" class="px-3 py-1.5 rounded-lg bg-cyber-cyan hover:bg-cyan-300 text-black font-arcade font-black text-xs transition">
+                    BUY 75🪙
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Avatar Frames Vault -->
+            <div>
+              <div class="text-xs font-arcade font-bold text-slate-400 uppercase mb-2">NEURAL AVATAR FRAMES</div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                ${AVATAR_FRAMES.map(frame => {
+                  const isUnlocked = state.unlockedFrames.includes(frame.id);
+                  const isEquipped = state.avatarFrame === frame.id;
+                  return `
+                    <div class="glass-panel p-2.5 rounded-xl border flex items-center justify-between" style="border-color: ${isEquipped ? frame.color : 'rgba(255,255,255,0.1)'}">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs border-2" style="border-color: ${frame.color}; color: ${frame.color}">
+                          ${state.playerName.charAt(0)}
+                        </div>
+                        <div>
+                          <div class="text-xs font-bold text-slate-200">${frame.title}</div>
+                          <div class="text-[10px] text-slate-500">${frame.price === 0 ? 'Standard' : frame.price + ' Coins'}</div>
+                        </div>
+                      </div>
+                      ${isEquipped ? `
+                        <span class="text-[10px] font-bold text-cyber-green px-2 py-0.5 rounded bg-cyber-green/20">EQUIPPED</span>
+                      ` : (isUnlocked ? `
+                        <button onclick="equipFrame('${frame.id}')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition">EQUIP</button>
+                      ` : `
+                        <button onclick="unlockFrame('${frame.id}', ${frame.price})" class="px-2.5 py-1 rounded bg-cyber-yellow hover:bg-yellow-400 text-black text-xs font-bold transition">UNLOCK</button>
+                      `)}
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <button onclick="setScreen('home')" class="w-full py-3 rounded-xl glass-panel text-slate-300 hover:text-white font-bold text-xs tracking-wider transition">
+              RETURN TO HUB
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function buyPowerUp(type, cost) {
+      if (state.coins < cost) {
+        showNotification('Not enough Rush Coins!', '#ff2a55');
+        sound.wrong();
+        return;
+      }
+      state.coins -= cost;
+      state.powerups[type]++;
+      saveState();
+      sound.powerup();
+      showNotification(`+1 ${type.toUpperCase()} Stocked!`, '#00ff88');
+      renderApp();
+    }
+
+    function unlockFrame(frameId, price) {
+      if (state.coins < price) {
+        showNotification('Not enough Rush Coins!', '#ff2a55');
+        sound.wrong();
+        return;
+      }
+      state.coins -= price;
+      state.unlockedFrames.push(frameId);
+      state.avatarFrame = frameId;
+      saveState();
+      sound.streak();
+      showNotification('Avatar Frame Unlocked & Equipped!', '#00ff88');
+      renderApp();
+    }
+
+    function equipFrame(frameId) {
+      state.avatarFrame = frameId;
+      saveState();
+      sound.powerup();
+      renderApp();
+    }
+
+    /**
+     * MODAL DIALOGS: FLEX CARD & LOOT BOX
+     */
+    function openFlexCardModal(grade, ratingStatement, accuracy, avgSpeed) {
+      const rank = getRank(state.xp);
+      const frame = AVATAR_FRAMES.find(f => f.id === state.avatarFrame) || AVATAR_FRAMES[0];
+
+      const modal = document.createElement('div');
+      modal.id = 'activeModal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn';
+      modal.innerHTML = `
+        <div class="w-full max-w-sm glass-panel p-5 rounded-3xl border-2 border-cyber-yellow shadow-[0_0_35px_rgba(255,222,0,0.4)] text-center relative">
+          <button onclick="closeModal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-lg">✕</button>
+
+          <div class="text-[10px] font-arcade font-bold tracking-widest text-cyber-yellow uppercase mb-2">OFFICIAL FLEX CARD</div>
+
+          <!-- Flex Card Body -->
+          <div class="glass-panel p-4 rounded-2xl border" style="border-color: ${frame.color}">
+            <div class="flex items-center gap-3 text-left">
+              <div class="w-12 h-12 rounded-full flex items-center justify-center font-arcade font-black text-lg border-2" style="border-color: ${frame.color}; color: ${frame.color}">
+                ${state.playerName.charAt(0)}
+              </div>
+              <div class="flex-1">
+                <div class="font-arcade font-black text-base text-slate-100">${state.playerName}</div>
+                <div class="text-[11px] font-bold" style="color: ${rank.color}">RANK: ${rank.title}</div>
+              </div>
+              <div class="px-2.5 py-1 rounded-lg bg-cyber-yellow/20 border border-cyber-yellow font-arcade font-black text-xl text-cyber-yellow">
+                ${grade}
+              </div>
+            </div>
+
+            <div class="my-4">
+              <div class="text-3xl font-arcade font-black text-cyber-cyan">${game.score} PTS</div>
+              <div class="text-xs font-bold text-cyber-green mt-0.5 tracking-wider">${ratingStatement}</div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-1.5 text-center text-xs">
+              <div class="bg-cyber-surface p-1.5 rounded-lg border border-slate-800">
+                <div class="text-[9px] text-slate-400">ACCURACY</div>
+                <div class="font-black text-cyber-green text-sm">${accuracy}%</div>
+              </div>
+              <div class="bg-cyber-surface p-1.5 rounded-lg border border-slate-800">
+                <div class="text-[9px] text-slate-400">SPEED</div>
+                <div class="font-black text-cyber-cyan text-sm">${avgSpeed}s</div>
+              </div>
+              <div class="bg-cyber-surface p-1.5 rounded-lg border border-slate-800">
+                <div class="text-[9px] text-slate-400">STREAK</div>
+                <div class="font-black text-cyber-yellow text-sm">${game.maxStreak}x</div>
+              </div>
+            </div>
+
+            <!-- MANDATORY WATERMARK -->
+            <div class="mt-4 pt-2 border-t border-slate-800 text-[10px] text-cyber-pink font-bold italic">
+              ⚡ QUIZRUSH · Created by Jessie Israel
+            </div>
+          </div>
+
+          <div class="mt-4 flex gap-2">
+            <button onclick="shareScoreCard('${grade}', ${game.score}, ${accuracy})" class="flex-1 py-3 rounded-xl bg-cyber-cyan hover:bg-cyan-300 text-black font-arcade font-bold text-xs tracking-wider transition">
+              SHARE FLEX CARD
+            </button>
+            <button onclick="closeModal()" class="px-4 py-3 rounded-xl glass-panel text-slate-300 hover:text-white text-xs font-bold">
+              CLOSE
+            </button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+
+    function renderLootBoxModal(coins, xp, pType) {
+      const modal = document.createElement('div');
+      modal.id = 'activeModal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn';
+      modal.innerHTML = `
+        <div class="w-full max-w-sm glass-panel p-5 rounded-3xl border-2 border-cyber-yellow shadow-[0_0_35px_rgba(255,222,0,0.5)] text-center">
+          <div class="w-16 h-16 mx-auto rounded-full flex items-center justify-center text-3xl bg-cyber-yellow/20 border-2 border-cyber-yellow animate-bounce mb-3">
+            🎁
+          </div>
+          <h2 class="text-lg font-arcade font-black text-cyber-yellow uppercase">MYSTERY LOOT UNBOXED!</h2>
+          <p class="text-xs text-slate-400 mt-1">Tactical drops earned from answering consecutive trivia correct:</p>
+
+          <div class="glass-panel p-3 rounded-xl my-4 flex flex-col gap-2 text-xs font-bold text-left border border-slate-700">
+            <div class="flex justify-between items-center text-cyber-yellow">
+              <span>Rush Coins:</span>
+              <span class="text-sm font-black">+${coins} 🪙</span>
+            </div>
+            <div class="flex justify-between items-center text-cyber-cyan">
+              <span>Neural XP:</span>
+              <span class="text-sm font-black">+${xp} XP</span>
+            </div>
+            <div class="flex justify-between items-center text-cyber-pink">
+              <span>Tactical Power-Up:</span>
+              <span class="text-sm font-black">+1 ${pType.toUpperCase()}</span>
+            </div>
+          </div>
+
+          <button onclick="closeModal()" class="w-full py-3 rounded-xl bg-cyber-yellow text-black font-arcade font-bold text-xs tracking-widest hover:bg-yellow-300 transition">
+            CLAIM REWARDS
+          </button>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('activeModal');
+      if (modal) modal.remove();
+      renderApp();
+    }
+
+    function shareScoreCard(grade, score, accuracy) {
+      const text = `⚡ QUIZRUSH CYBER ARCADE ⚡\nPilot: ${state.playerName}\nScore: ${score} PTS | Grade: ${grade}\nAccuracy: ${accuracy}%\nCreated by Jessie Israel · Play QuizRush now!`;
+      if (navigator.share) {
+        navigator.share({
+          title: 'QuizRush Scorecard',
+          text: text
+        }).catch(() => {});
+      } else {
+        navigator.clipboard.writeText(text);
+        showNotification('Scorecard copied to clipboard!', '#00ff88');
+      }
+    }
+
+    // Initialize App
+    window.addEventListener('DOMContentLoaded', () => {
+      checkDailyReward();
+      applyTheme(state.theme);
+      renderApp();
+
+      // Register Service Worker for offline PWA
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      }
+    });
+  </script>
+</body>
+</html>
